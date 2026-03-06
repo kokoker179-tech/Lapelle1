@@ -51,6 +51,7 @@ export default function App() {
   const [areas, setAreas] = useState<Area[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const t = (key: keyof typeof translations['en']) => translations[lang][key] || key;
 
@@ -142,7 +143,10 @@ export default function App() {
 
   const SidebarItem = ({ id, icon: Icon, label }: { id: Page, icon: any, label: string }) => (
     <button
-      onClick={() => setCurrentPage(id)}
+      onClick={() => {
+        setCurrentPage(id);
+        setIsSidebarOpen(false);
+      }}
       className={cn(
         "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
         currentPage === id 
@@ -151,7 +155,8 @@ export default function App() {
       )}
     >
       <Icon className={cn("w-5 h-5", currentPage === id ? "text-white" : "text-slate-400 group-hover:text-slate-600")} />
-      <span className="font-medium">{label}</span>
+      <span className="font-medium lg:block hidden">{label}</span>
+      <span className="font-medium lg:hidden block">{label}</span>
       {currentPage === id && (
         <motion.div layoutId="active-pill" className={cn("w-1.5 h-1.5 rounded-full bg-white", lang === 'ar' ? "mr-auto" : "ml-auto")} />
       )}
@@ -160,16 +165,33 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen bg-slate-50" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+      {/* Mobile Overlay */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsSidebarOpen(false)}
+            className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 lg:hidden"
+          />
+        )}
+      </AnimatePresence>
+
       {/* Sidebar */}
       <aside className={cn(
-        "w-72 bg-white p-6 flex flex-col gap-8 sticky top-0 h-screen",
-        lang === 'ar' ? "border-l border-slate-200" : "border-r border-slate-200"
+        "fixed lg:sticky top-0 h-screen bg-white p-6 flex flex-col gap-8 transition-all duration-300 z-50",
+        lang === 'ar' ? "border-l border-slate-200" : "border-r border-slate-200",
+        isSidebarOpen ? "translate-x-0 w-72" : cn(
+          lang === 'ar' ? "translate-x-full lg:translate-x-0" : "-translate-x-full lg:translate-x-0",
+          "lg:w-24 xl:w-72"
+        )
       )}>
         <div className="flex items-center gap-3 px-2">
-          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-100">
+          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-100 shrink-0">
             <Box className="text-white w-6 h-6" />
           </div>
-          <h1 className="text-2xl font-display font-bold tracking-tight text-slate-900">Lapelle</h1>
+          <h1 className={cn("text-2xl font-display font-bold tracking-tight text-slate-900 xl:block hidden", isSidebarOpen && "block")}>Lapelle</h1>
         </div>
 
         <nav className="flex flex-col gap-2">
@@ -184,18 +206,18 @@ export default function App() {
             onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-all"
           >
-            <Languages className="w-5 h-5 text-slate-400" />
-            <span className="font-medium">{lang === 'en' ? 'العربية' : 'English'}</span>
+            <Languages className="w-5 h-5 text-slate-400 shrink-0" />
+            <span className={cn("font-medium xl:block hidden", isSidebarOpen && "block")}>{lang === 'en' ? 'العربية' : 'English'}</span>
           </button>
 
-          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 overflow-hidden">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
+              <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold shrink-0">
                 AD
               </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-900">{t('admin')}</p>
-                <p className="text-xs text-slate-500">{t('manager')}</p>
+              <div className={cn("xl:block hidden", isSidebarOpen && "block")}>
+                <p className="text-sm font-semibold text-slate-900 truncate">{t('admin')}</p>
+                <p className="text-xs text-slate-500 truncate">{t('manager')}</p>
               </div>
             </div>
           </div>
@@ -203,20 +225,28 @@ export default function App() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-10 overflow-auto">
-        <header className="flex items-center justify-between mb-10">
-          <div>
-            <h2 className="text-3xl font-display font-bold text-slate-900">{t(currentPage as any)}</h2>
-            <p className="text-slate-500 mt-1">{t('welcome')}</p>
+      <main className="flex-1 p-4 lg:p-10 overflow-auto w-full">
+        <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-10 gap-4">
+          <div className="flex items-center gap-4 w-full sm:w-auto">
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="lg:hidden p-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50"
+            >
+              <LayoutDashboard className="w-6 h-6" />
+            </button>
+            <div>
+              <h2 className="text-2xl lg:text-3xl font-display font-bold text-slate-900">{t(currentPage as any)}</h2>
+              <p className="text-slate-500 mt-1 text-sm lg:text-base">{t('welcome')}</p>
+            </div>
           </div>
-          <div className="flex gap-4">
-            <div className="relative">
+          <div className="flex gap-4 w-full sm:w-auto">
+            <div className="relative w-full sm:w-auto">
               <Search className={cn("absolute top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400", lang === 'ar' ? "right-3" : "left-3")} />
               <input 
                 type="text" 
                 placeholder={t('search')} 
                 className={cn(
-                  "py-2.5 bg-white border border-slate-200 rounded-xl w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all",
+                  "py-2.5 bg-white border border-slate-200 rounded-xl w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all",
                   lang === 'ar' ? "pr-10 pl-4" : "pl-10 pr-4"
                 )}
               />
