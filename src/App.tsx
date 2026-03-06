@@ -23,7 +23,9 @@ import {
   Check,
   X,
   Languages,
-  RefreshCw
+  RefreshCw,
+  FileText,
+  Clock
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -55,6 +57,7 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
+  const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -63,15 +66,16 @@ export default function App() {
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date('2026-03-06T13:45:13-08:00'));
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [dbStatus, setDbStatus] = useState<'online' | 'offline' | 'checking'>('checking');
+  const [dbStatus, setDbStatus] = useState<'online' | 'offline' | 'checking' | 'local'>('checking');
 
   const t = (key: keyof typeof translations['en']) => translations[lang][key] || key;
 
   const checkHealth = async () => {
     try {
       const res = await fetch('/api/health');
+      const data = await res.json();
       if (res.ok) {
-        setDbStatus('online');
+        setDbStatus(data.database === 'local' ? 'local' : 'online');
       } else {
         setDbStatus('offline');
       }
@@ -100,17 +104,19 @@ export default function App() {
     
     try {
       await checkHealth();
-      const [statsRes, productsRes, areasRes, salesRes] = await Promise.all([
+      const [statsRes, productsRes, areasRes, salesRes, postsRes] = await Promise.all([
         fetch('/api/stats'),
         fetch('/api/products'),
         fetch('/api/areas'),
-        fetch('/api/sales')
+        fetch('/api/sales'),
+        fetch('/api/posts')
       ]);
       
       setStats(await statsRes.json());
       setProducts(await productsRes.json());
       setAreas(await areasRes.json());
       setSales(await salesRes.json());
+      setPosts(await postsRes.json());
       setLastUpdated(new Date());
       
       if (isManual) {
@@ -334,11 +340,12 @@ export default function App() {
                   "w-2 h-2 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]",
                   isRefreshing ? "bg-amber-500 animate-spin" : 
                   dbStatus === 'online' ? "bg-emerald-500 animate-pulse" : 
+                  dbStatus === 'local' ? "bg-indigo-500 shadow-[0_0_8px_rgba(79,70,229,0.5)]" :
                   dbStatus === 'offline' ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]" : 
                   "bg-slate-300"
                 )} />
                 <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
-                  {dbStatus === 'online' ? t('dbActive') : dbStatus === 'offline' ? (lang === 'ar' ? 'القاعدة متوقفة' : 'DB Offline') : (lang === 'ar' ? 'جاري الفحص...' : 'Checking...')}
+                  {dbStatus === 'online' ? t('dbActive') : dbStatus === 'local' ? (lang === 'ar' ? 'قاعدة محلية' : 'Local DB') : dbStatus === 'offline' ? (lang === 'ar' ? 'القاعدة متوقفة' : 'DB Offline') : (lang === 'ar' ? 'جاري الفحص...' : 'Checking...')}
                 </span>
               </div>
               <RefreshCw className={cn("w-3 h-3 text-slate-400 group-hover:text-indigo-600 transition-all", isRefreshing && "animate-spin text-indigo-600")} />
@@ -432,6 +439,93 @@ export default function App() {
                 />
               </div>
 
+              {/* Database Connection Info */}
+              <div className="bg-indigo-900 text-white p-6 rounded-3xl shadow-xl shadow-indigo-200 flex flex-col md:flex-row items-center justify-between gap-6 overflow-hidden relative">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
+                <div className="relative z-10">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                      <RefreshCw className={cn("w-5 h-5", dbStatus === 'online' || dbStatus === 'local' ? "animate-spin-slow" : "")} />
+                    </div>
+                    <h3 className="text-xl font-bold">
+                      {dbStatus === 'local' 
+                        ? (lang === 'ar' ? 'قاعدة بيانات محلية (SQLite)' : 'Local Database (SQLite)')
+                        : (lang === 'ar' ? 'اتصال قاعدة بيانات Netlify' : 'Netlify Database Connection')
+                      }
+                    </h3>
+                  </div>
+                  <p className="text-indigo-100 text-sm max-w-xl">
+                    {dbStatus === 'online' 
+                      ? (lang === 'ar' ? 'الموقع متصل بنجاح بقاعدة بيانات Neon/Netlify. جميع البيانات يتم حفظها سحابياً.' : 'Site is successfully connected to Neon/Netlify database. All data is stored in the cloud.')
+                      : dbStatus === 'local'
+                      ? (lang === 'ar' ? 'الموقع يعمل الآن تلقائياً باستخدام قاعدة بيانات محلية. بياناتك محفوظة بأمان في ملف data.db.' : 'Site is now running automatically using a local database. Your data is safely stored in data.db.')
+                      : (lang === 'ar' ? 'الموقع يعمل حالياً بدون قاعدة بيانات سحابية. يرجى ضبط متغير البيئة DATABASE_URL.' : 'Site is currently running without a cloud database. Please set the DATABASE_URL environment variable.')
+                    }
+                  </p>
+                </div>
+                <div className="relative z-10 flex flex-col items-center md:items-end gap-2">
+                  <div className={cn(
+                    "px-4 py-2 rounded-full font-bold text-sm flex items-center gap-2",
+                    dbStatus === 'online' ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : 
+                    dbStatus === 'local' ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30" :
+                    "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                  )}>
+                    <div className={cn("w-2 h-2 rounded-full", 
+                      dbStatus === 'online' ? "bg-emerald-400 animate-pulse" : 
+                      dbStatus === 'local' ? "bg-indigo-400" :
+                      "bg-rose-400"
+                    )} />
+                    {dbStatus === 'online' ? (lang === 'ar' ? 'متصل' : 'Connected') : 
+                     dbStatus === 'local' ? (lang === 'ar' ? 'وضع محلي' : 'Local Mode') :
+                     (lang === 'ar' ? 'غير متصل' : 'Disconnected')}
+                  </div>
+                  <p className="text-[10px] text-indigo-300 uppercase tracking-widest font-bold">
+                    {dbStatus === 'local' ? 'SQLite' : 'Neon PostgreSQL'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Setup Guide - Only visible when offline or local (as an upgrade option) */}
+              {dbStatus !== 'online' && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="bg-white border-2 border-dashed border-slate-200 rounded-3xl p-8 text-center"
+                >
+                  <div className="max-w-2xl mx-auto">
+                    <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 mx-auto mb-6">
+                      <RefreshCw className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-slate-900 mb-4">
+                      {dbStatus === 'local' 
+                        ? (lang === 'ar' ? 'هل تريد الترقية إلى قاعدة بيانات سحابية؟' : 'Want to upgrade to a Cloud Database?')
+                        : t('dbSetupTitle')
+                      }
+                    </h3>
+                    <p className="text-slate-500 mb-8">
+                      {dbStatus === 'local' 
+                        ? (lang === 'ar' ? 'أنت تستخدم الآن قاعدة بيانات محلية. للوصول إلى بياناتك من أي مكان، اتبع الخطوات التالية للربط مع Neon.' : 'You are currently using a local database. To access your data from anywhere, follow these steps to connect with Neon.')
+                        : (lang === 'ar' ? 'اتبع هذه الخطوات البسيطة لتفعيل قاعدة البيانات السحابية.' : 'Follow these simple steps to activate your cloud database.')
+                      }
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-right mb-8" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                        <p className="text-sm font-medium text-slate-600">{t('dbSetupStep1')}</p>
+                      </div>
+                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                        <p className="text-sm font-medium text-slate-600">{t('dbSetupStep2')}</p>
+                      </div>
+                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                        <p className="text-sm font-medium text-slate-600">{t('dbSetupStep3')}</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-slate-500 italic">
+                      {t('dbSetupNote')}
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+
               {/* Charts */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
@@ -511,6 +605,36 @@ export default function App() {
                   >
                     {t('viewAllSales')}
                   </button>
+                </div>
+
+                {/* Posts Section (Neon Example) */}
+                <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-900">{lang === 'ar' ? 'آخر التحديثات' : 'Latest Updates'}</h3>
+                        <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Neon DB Example</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    {posts.map((post) => (
+                      <div key={post.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-amber-200 transition-all group">
+                        <h4 className="font-bold text-slate-900 mb-1 group-hover:text-amber-600 transition-colors">{post.title}</h4>
+                        <p className="text-sm text-slate-600 line-clamp-2">{post.content}</p>
+                        <div className="mt-3 flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                          <Clock className="w-3 h-3" />
+                          {new Date(post.created_at).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US')}
+                        </div>
+                      </div>
+                    ))}
+                    {posts.length === 0 && (
+                      <p className="text-center py-4 text-slate-400 text-sm italic">No updates found</p>
+                    )}
+                  </div>
                 </div>
               </div>
             </motion.div>
