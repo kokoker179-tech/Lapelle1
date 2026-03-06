@@ -22,7 +22,8 @@ import {
   Edit2,
   Check,
   X,
-  Languages
+  Languages,
+  RefreshCw
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -61,6 +62,7 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date('2026-03-06T13:45:13-08:00'));
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const t = (key: keyof typeof translations['en']) => translations[lang][key] || key;
 
@@ -75,8 +77,10 @@ export default function App() {
     }
   }, [toast]);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (isManual = false) => {
+    if (isManual) setIsRefreshing(true);
+    else setLoading(true);
+    
     try {
       const [statsRes, productsRes, areasRes, salesRes] = await Promise.all([
         fetch('/api/stats'),
@@ -90,10 +94,18 @@ export default function App() {
       setAreas(await areasRes.json());
       setSales(await salesRes.json());
       setLastUpdated(new Date());
+      
+      if (isManual) {
+        setToast({ message: lang === 'ar' ? 'تم تحديث البيانات بنجاح' : 'Data refreshed successfully', type: 'success' });
+      }
     } catch (error) {
       console.error("Error fetching data:", error);
+      if (isManual) {
+        setToast({ message: lang === 'ar' ? 'فشل تحديث البيانات' : 'Failed to refresh data', type: 'error' });
+      }
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -293,10 +305,20 @@ export default function App() {
           </div>
 
           {/* Database Status */}
-          <div className="px-2 py-4 border-t border-slate-100">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-              <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">{t('dbActive')}</span>
+          <button 
+            onClick={() => fetchData(true)}
+            disabled={isRefreshing}
+            className="w-full text-left px-2 py-4 border-t border-slate-100 hover:bg-slate-50 transition-colors group disabled:opacity-70"
+          >
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <div className={cn(
+                  "w-2 h-2 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]",
+                  isRefreshing ? "bg-amber-500 animate-spin" : "bg-emerald-500 animate-pulse"
+                )} />
+                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">{t('dbActive')}</span>
+              </div>
+              <RefreshCw className={cn("w-3 h-3 text-slate-400 group-hover:text-indigo-600 transition-all", isRefreshing && "animate-spin text-indigo-600")} />
             </div>
             <div className="flex flex-col">
               <span className="text-[10px] text-slate-400 font-medium">{t('lastUpdated')}:</span>
@@ -316,7 +338,7 @@ export default function App() {
                 })}
               </span>
             </div>
-          </div>
+          </button>
         </div>
       </aside>
 
