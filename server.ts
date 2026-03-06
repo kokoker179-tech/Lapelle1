@@ -66,15 +66,6 @@ async function initDb() {
     console.log(`🚀 Initializing ${dbType === 'neon' ? 'Netlify/Neon' : 'Local SQLite'} Database...`);
     
     await sql`
-      CREATE TABLE IF NOT EXISTS posts (
-        id SERIAL PRIMARY KEY,
-        title TEXT NOT NULL,
-        content TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
-
-    await sql`
       CREATE TABLE IF NOT EXISTS products (
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
@@ -130,12 +121,6 @@ async function initDb() {
         INSERT INTO sales (product_id, area_id, quantity, total_price) VALUES 
         (1, 1, 5, 600.00),
         (2, 2, 10, 450.00);
-      `;
-
-      await sql`
-        INSERT INTO posts (title, content) VALUES 
-        ('Welcome to Lapelle', 'This is our first post on the new database.'),
-        ('New Collection', 'Check out our latest leather bags collection.');
       `;
     }
     console.log("Database initialized successfully");
@@ -322,29 +307,6 @@ async function startServer() {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete sale" });
-    }
-  });
-
-  app.get("/api/posts", async (req, res) => {
-    try {
-      const posts = await sql`SELECT * FROM posts ORDER BY created_at DESC`;
-      res.json(posts);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch posts" });
-    }
-  });
-
-  app.get("/api/posts/:id", async (req, res) => {
-    const { id } = req.params;
-    try {
-      // Using the exact pattern from the user's snippet
-      const [post] = await sql`SELECT * FROM posts WHERE id = ${id}`;
-      if (!post) {
-        return res.status(404).json({ error: "Post not found" });
-      }
-      res.json(post);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch post" });
     }
   });
 
