@@ -18,6 +18,10 @@ import {
   ArrowDownRight,
   Box,
   Store,
+  Trash2,
+  Edit2,
+  Check,
+  X,
   Languages
 } from 'lucide-react';
 import { 
@@ -52,6 +56,8 @@ export default function App() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<any>(null);
 
   const t = (key: keyof typeof translations['en']) => translations[lang][key] || key;
 
@@ -139,6 +145,28 @@ export default function App() {
       const err = await res.json();
       alert(err.error);
     }
+  };
+
+  const handleDelete = async (type: 'products' | 'areas' | 'sales', id: number) => {
+    if (!confirm(t('confirmDelete'))) return;
+    await fetch(`/api/${type}/${id}`, { method: 'DELETE' });
+    fetchData();
+  };
+
+  const startEditing = (type: 'products' | 'areas', item: any) => {
+    setEditingId(item.id);
+    setEditForm(item);
+  };
+
+  const handleUpdate = async (type: 'products' | 'areas') => {
+    await fetch(`/api/${type}/${editingId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editForm),
+    });
+    setEditingId(null);
+    setEditForm(null);
+    fetchData();
   };
 
   const SidebarItem = ({ id, icon: Icon, label }: { id: Page, icon: any, label: string }) => (
@@ -393,22 +421,57 @@ export default function App() {
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">{t('price')}</th>
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">{t('stock')}</th>
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">{t('status')}</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">{t('actions')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {products.map((product) => (
                         <tr key={product.id} className="hover:bg-slate-50/50 transition-colors">
                           <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
-                                <Package className="w-4 h-4" />
+                            {editingId === product.id ? (
+                              <input 
+                                value={editForm.name} 
+                                onChange={e => setEditForm({...editForm, name: e.target.value})}
+                                className="w-full px-2 py-1 border rounded"
+                              />
+                            ) : (
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+                                  <Package className="w-4 h-4" />
+                                </div>
+                                <span className="font-semibold text-slate-900">{product.name}</span>
                               </div>
-                              <span className="font-semibold text-slate-900">{product.name}</span>
-                            </div>
+                            )}
                           </td>
-                          <td className="px-6 py-4 text-sm text-slate-600">{product.category}</td>
-                          <td className="px-6 py-4 font-bold text-slate-900">${product.price}</td>
-                          <td className="px-6 py-4 text-sm text-slate-600">{product.stock} {t('qty')}</td>
+                          <td className="px-6 py-4 text-sm text-slate-600">
+                            {editingId === product.id ? (
+                              <input 
+                                value={editForm.category} 
+                                onChange={e => setEditForm({...editForm, category: e.target.value})}
+                                className="w-full px-2 py-1 border rounded"
+                              />
+                            ) : product.category}
+                          </td>
+                          <td className="px-6 py-4 font-bold text-slate-900">
+                            {editingId === product.id ? (
+                              <input 
+                                type="number"
+                                value={editForm.price} 
+                                onChange={e => setEditForm({...editForm, price: Number(e.target.value)})}
+                                className="w-full px-2 py-1 border rounded"
+                              />
+                            ) : `$${product.price}`}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-slate-600">
+                            {editingId === product.id ? (
+                              <input 
+                                type="number"
+                                value={editForm.stock} 
+                                onChange={e => setEditForm({...editForm, stock: Number(e.target.value)})}
+                                className="w-full px-2 py-1 border rounded"
+                              />
+                            ) : `${product.stock} ${t('qty')}`}
+                          </td>
                           <td className="px-6 py-4">
                             <span className={cn(
                               "px-2.5 py-1 rounded-full text-xs font-bold",
@@ -416,6 +479,21 @@ export default function App() {
                             )}>
                               {product.stock > 10 ? t('inStock') : t('lowStock')}
                             </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              {editingId === product.id ? (
+                                <>
+                                  <button onClick={() => handleUpdate('products')} className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"><Check className="w-4 h-4" /></button>
+                                  <button onClick={() => setEditingId(null)} className="p-1 text-rose-600 hover:bg-rose-50 rounded"><X className="w-4 h-4" /></button>
+                                </>
+                              ) : (
+                                <>
+                                  <button onClick={() => startEditing('products', product)} className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"><Edit2 className="w-4 h-4" /></button>
+                                  <button onClick={() => handleDelete('products', product.id)} className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"><Trash2 className="w-4 h-4" /></button>
+                                </>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -471,6 +549,7 @@ export default function App() {
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">{t('areas')}</th>
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">{t('qty')}</th>
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">{t('total')}</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">{t('actions')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -483,6 +562,9 @@ export default function App() {
                           <td className="px-6 py-4 text-sm text-slate-600">{sale.area_name}</td>
                           <td className="px-6 py-4 font-bold text-slate-900">{sale.quantity}</td>
                           <td className="px-6 py-4 font-bold text-indigo-600">${sale.total_price}</td>
+                          <td className="px-6 py-4">
+                            <button onClick={() => handleDelete('sales', sale.id)} className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"><Trash2 className="w-4 h-4" /></button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -533,19 +615,39 @@ export default function App() {
             >
               <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
                 {areas.map((area) => (
-                  <div key={area.id} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                  <div key={area.id} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative group">
                     <div className="flex items-start justify-between mb-4">
                       <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600">
                         <Store className="w-6 h-6" />
                       </div>
-                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('id')}: #{area.id}</span>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => handleDelete('areas', area.id)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button>
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('id')}: #{area.id}</span>
+                      </div>
                     </div>
-                    <h4 className="text-lg font-bold text-slate-900">{area.name}</h4>
-                    <p className="text-sm text-slate-500 mb-4">{area.company_name}</p>
-                    <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 p-3 rounded-xl">
-                      <MapPin className="w-4 h-4 text-slate-400" />
-                      {area.location}
-                    </div>
+                    {editingId === area.id ? (
+                      <div className="space-y-2">
+                        <input value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="w-full px-2 py-1 border rounded text-sm" />
+                        <input value={editForm.company_name} onChange={e => setEditForm({...editForm, company_name: e.target.value})} className="w-full px-2 py-1 border rounded text-sm" />
+                        <input value={editForm.location} onChange={e => setEditForm({...editForm, location: e.target.value})} className="w-full px-2 py-1 border rounded text-sm" />
+                        <div className="flex gap-2">
+                          <button onClick={() => handleUpdate('areas')} className="flex-1 py-1 bg-emerald-600 text-white rounded text-xs font-bold">Save</button>
+                          <button onClick={() => setEditingId(null)} className="flex-1 py-1 bg-slate-200 text-slate-600 rounded text-xs font-bold">Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-lg font-bold text-slate-900">{area.name}</h4>
+                          <button onClick={() => startEditing('areas', area)} className="p-1 text-slate-400 hover:text-indigo-600 opacity-0 group-hover:opacity-100"><Edit2 className="w-4 h-4" /></button>
+                        </div>
+                        <p className="text-sm text-slate-500 mb-4">{area.company_name}</p>
+                        <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 p-3 rounded-xl">
+                          <MapPin className="w-4 h-4 text-slate-400" />
+                          {area.location}
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
                 {areas.length === 0 && (

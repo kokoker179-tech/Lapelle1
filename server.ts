@@ -38,6 +38,24 @@ db.exec(`
   );
 `);
 
+// Seed sample data if empty
+const productCount = db.prepare("SELECT COUNT(*) as count FROM products").get() as any;
+if (productCount.count === 0) {
+  const insertProduct = db.prepare("INSERT INTO products (name, category, price, stock) VALUES (?, ?, ?, ?)");
+  insertProduct.run("Classic Leather Bag", "Bags", 120.00, 50);
+  insertProduct.run("Leather Wallet", "Accessories", 45.00, 100);
+  insertProduct.run("Premium Belt", "Accessories", 35.00, 75);
+
+  const insertArea = db.prepare("INSERT INTO distribution_areas (name, company_name, location) VALUES (?, ?, ?)");
+  insertArea.run("Cairo Central", "Egypt Logistics", "Cairo, Egypt");
+  insertArea.run("Alexandria Port", "Sea Trade Co", "Alexandria, Egypt");
+  insertArea.run("Dubai Mall Hub", "Gulf Retail", "Dubai, UAE");
+
+  const insertSale = db.prepare("INSERT INTO sales (product_id, area_id, quantity, total_price) VALUES (?, ?, ?, ?)");
+  insertSale.run(1, 1, 5, 600.00);
+  insertSale.run(2, 2, 10, 450.00);
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -56,6 +74,19 @@ async function startServer() {
     res.json({ id: info.lastInsertRowid });
   });
 
+  app.put("/api/products/:id", (req, res) => {
+    const { id } = req.params;
+    const { name, category, price, stock } = req.body;
+    db.prepare("UPDATE products SET name = ?, category = ?, price = ?, stock = ? WHERE id = ?").run(name, category, price, stock, id);
+    res.json({ success: true });
+  });
+
+  app.delete("/api/products/:id", (req, res) => {
+    const { id } = req.params;
+    db.prepare("DELETE FROM products WHERE id = ?").run(id);
+    res.json({ success: true });
+  });
+
   app.get("/api/areas", (req, res) => {
     const areas = db.prepare("SELECT * FROM distribution_areas").all();
     res.json(areas);
@@ -65,6 +96,19 @@ async function startServer() {
     const { name, company_name, location } = req.body;
     const info = db.prepare("INSERT INTO distribution_areas (name, company_name, location) VALUES (?, ?, ?)").run(name, company_name, location);
     res.json({ id: info.lastInsertRowid });
+  });
+
+  app.put("/api/areas/:id", (req, res) => {
+    const { id } = req.params;
+    const { name, company_name, location } = req.body;
+    db.prepare("UPDATE distribution_areas SET name = ?, company_name = ?, location = ? WHERE id = ?").run(name, company_name, location, id);
+    res.json({ success: true });
+  });
+
+  app.delete("/api/areas/:id", (req, res) => {
+    const { id } = req.params;
+    db.prepare("DELETE FROM distribution_areas WHERE id = ?").run(id);
+    res.json({ success: true });
   });
 
   app.get("/api/sales", (req, res) => {
@@ -95,6 +139,19 @@ async function startServer() {
     });
 
     transaction();
+    res.json({ success: true });
+  });
+
+  app.delete("/api/sales/:id", (req, res) => {
+    const { id } = req.params;
+    const sale = db.prepare("SELECT product_id, quantity FROM sales WHERE id = ?").get(id) as any;
+    if (sale) {
+      const transaction = db.transaction(() => {
+        db.prepare("UPDATE products SET stock = stock + ? WHERE id = ?").run(sale.quantity, sale.product_id);
+        db.prepare("DELETE FROM sales WHERE id = ?").run(id);
+      });
+      transaction();
+    }
     res.json({ success: true });
   });
 

@@ -42,6 +42,12 @@ export const translations = {
     chooseArea: "Choose an area...",
     last30: "Last 30 days",
     last7: "Last 7 days",
+    edit: "Edit",
+    delete: "Delete",
+    save: "Save",
+    cancel: "Cancel",
+    confirmDelete: "Are you sure you want to delete this?",
+    actions: "Actions",
   },
   ar: {
     dashboard: "لوحة التحكم",
@@ -86,6 +92,12 @@ export const translations = {
     chooseArea: "اختر منطقة...",
     last30: "آخر 30 يوم",
     last7: "آخر 7 أيام",
+    edit: "تعديل",
+    delete: "حذف",
+    save: "حفظ",
+    cancel: "إلغاء",
+    confirmDelete: "هل أنت متأكد من الحذف؟",
+    actions: "الإجراءات",
   }
 };
 
