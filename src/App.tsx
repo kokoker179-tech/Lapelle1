@@ -60,6 +60,7 @@ export default function App() {
   const [editForm, setEditForm] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date('2026-03-06T13:45:13-08:00'));
 
   const t = (key: keyof typeof translations['en']) => translations[lang][key] || key;
 
@@ -88,6 +89,7 @@ export default function App() {
       setProducts(await productsRes.json());
       setAreas(await areasRes.json());
       setSales(await salesRes.json());
+      setLastUpdated(new Date());
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -287,6 +289,32 @@ export default function App() {
                 <p className="text-sm font-semibold text-slate-900 truncate">{t('admin')}</p>
                 <p className="text-xs text-slate-500 truncate">{t('manager')}</p>
               </div>
+            </div>
+          </div>
+
+          {/* Database Status */}
+          <div className="px-2 py-4 border-t border-slate-100">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+              <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">{t('dbActive')}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[10px] text-slate-400 font-medium">{t('lastUpdated')}:</span>
+              <span className="text-[10px] text-slate-500 font-bold tabular-nums">
+                {lastUpdated.toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US', { 
+                  weekday: 'long', 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric' 
+                })}
+              </span>
+              <span className="text-[10px] text-indigo-600 font-bold tabular-nums">
+                {lastUpdated.toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { 
+                  hour: '2-digit', 
+                  minute: '2-digit', 
+                  second: '2-digit' 
+                })}
+              </span>
             </div>
           </div>
         </div>

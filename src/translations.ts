@@ -48,6 +48,8 @@ export const translations = {
     cancel: "Cancel",
     confirmDelete: "Are you sure you want to delete this?",
     actions: "Actions",
+    dbActive: "Database Active",
+    lastUpdated: "Last Updated",
   },
   ar: {
     dashboard: "لوحة التحكم",
@@ -98,6 +100,8 @@ export const translations = {
     cancel: "إلغاء",
     confirmDelete: "هل أنت متأكد من الحذف؟",
     actions: "الإجراءات",
+    dbActive: "قاعدة البيانات تعمل",
+    lastUpdated: "آخر تحديث",
   }
 };
 
