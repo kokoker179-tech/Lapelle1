@@ -58,6 +58,7 @@ export default function App() {
   const [areas, setAreas] = useState<Area[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dbStatus, setDbStatus] = useState<{ type: 'neon' | 'sqlite', status: 'connected' | 'error' | 'loading' }>({ type: 'sqlite', status: 'loading' });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<any>(null);
@@ -70,9 +71,15 @@ export default function App() {
 
   const checkHealth = async () => {
     try {
-      await fetch('/api/health');
+      const res = await fetch('/api/health');
+      const data = await res.json();
+      setDbStatus({ 
+        type: data.type || 'sqlite', 
+        status: data.status === 'ok' ? 'connected' : 'error' 
+      });
     } catch (error) {
       console.error("Health check failed");
+      setDbStatus(prev => ({ ...prev, status: 'error' }));
     }
   };
 
@@ -319,10 +326,12 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <div className={cn(
                   "w-2 h-2 rounded-full",
-                  isRefreshing ? "bg-amber-500 animate-spin" : "bg-emerald-500 animate-pulse"
+                  dbStatus.status === 'connected' 
+                    ? (dbStatus.type === 'neon' ? "bg-indigo-500 animate-pulse" : "bg-emerald-500") 
+                    : "bg-rose-500 animate-pulse"
                 )} />
                 <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
-                  {lang === 'ar' ? 'النظام نشط' : 'System Active'}
+                  {dbStatus.type === 'neon' ? (lang === 'ar' ? 'سحابة Neon' : 'Neon Cloud') : (lang === 'ar' ? 'قاعدة محلية' : 'Local SQLite')}
                 </span>
               </div>
               <RefreshCw className={cn("w-3 h-3 text-slate-400 group-hover:text-indigo-600 transition-all", isRefreshing && "animate-spin text-indigo-600")} />
@@ -408,6 +417,34 @@ export default function App() {
                   lang={lang}
                 />
               </div>
+
+              {/* Database Setup Guide (Only if SQLite) */}
+              {dbStatus.type === 'sqlite' && (
+                <div className="bg-indigo-600 rounded-3xl p-8 text-white relative overflow-hidden shadow-xl shadow-indigo-200">
+                  <div className="relative z-10">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                        <RefreshCw className="w-5 h-5" />
+                      </div>
+                      <h3 className="text-xl font-bold">{t('dbSetupTitle')}</h3>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                      <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
+                        <p className="text-sm leading-relaxed opacity-90">{t('dbSetupStep1')}</p>
+                      </div>
+                      <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
+                        <p className="text-sm leading-relaxed opacity-90">{t('dbSetupStep2')}</p>
+                      </div>
+                      <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
+                        <p className="text-sm leading-relaxed opacity-90">{t('dbSetupStep3')}</p>
+                      </div>
+                    </div>
+                    <p className="text-sm font-medium opacity-80 italic">{t('dbSetupNote')}</p>
+                  </div>
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
+                  <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-400/20 rounded-full translate-y-1/2 -translate-x-1/2 blur-2xl" />
+                </div>
+              )}
 
               {/* Charts */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
