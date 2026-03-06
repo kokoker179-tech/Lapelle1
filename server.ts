@@ -4,11 +4,13 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { neon } from '@neondatabase/serverless';
 import Database from 'better-sqlite3';
+import "dotenv/config";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Initialize Database
-const dbUrl = process.env.DATABASE_URL || process.env.NETLIFY_DATABASE_URL;
+// Priority: DATABASE_URL (Env) -> Hardcoded Fallback (from user) -> SQLite
+const dbUrl = process.env.DATABASE_URL || "postgresql://neondb_owner:npg_6LWBu7sUSjVC@ep-small-butterfly-a4f60x0y-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require";
 let dbType: 'neon' | 'sqlite' = 'sqlite';
 let neonSql: any;
 let sqlite: any;

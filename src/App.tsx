@@ -418,8 +418,28 @@ export default function App() {
                 />
               </div>
 
-              {/* Database Setup Guide (Only if SQLite) */}
-              {dbStatus.type === 'sqlite' && (
+              {/* Database Status Banner */}
+              {dbStatus.type === 'neon' ? (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-3xl p-6 text-white shadow-lg shadow-emerald-100 flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-md">
+                      <RefreshCw className="w-6 h-6 animate-spin-slow" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold">{lang === 'ar' ? 'متصل بالسحابة الحقيقية' : 'Connected to Real Cloud'}</h3>
+                      <p className="text-sm opacity-90">{lang === 'ar' ? 'بياناتك الآن مخزنة بشكل دائم على Neon PostgreSQL' : 'Your data is now permanently stored on Neon PostgreSQL'}</p>
+                    </div>
+                  </div>
+                  <div className="hidden sm:flex items-center gap-2 bg-white/10 px-4 py-2 rounded-xl backdrop-blur-sm border border-white/10">
+                    <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                    <span className="text-xs font-bold uppercase tracking-wider">Live Sync</span>
+                  </div>
+                </motion.div>
+              ) : (
                 <div className="bg-indigo-600 rounded-3xl p-8 text-white relative overflow-hidden shadow-xl shadow-indigo-200">
                   <div className="relative z-10">
                     <div className="flex items-center gap-3 mb-4">
