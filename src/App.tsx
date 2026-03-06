@@ -58,12 +58,21 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<any>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
 
   const t = (key: keyof typeof translations['en']) => translations[lang][key] || key;
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -88,6 +97,7 @@ export default function App() {
 
   const handleAddProduct = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setIsSubmitting(true);
     const formData = new FormData(e.currentTarget);
     const data = {
       name: formData.get('name'),
@@ -96,13 +106,25 @@ export default function App() {
       stock: Number(formData.get('stock')),
     };
 
-    await fetch('/api/products', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    fetchData();
-    e.currentTarget.reset();
+    try {
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      
+      if (res.ok) {
+        setToast({ message: lang === 'ar' ? 'تمت إضافة المنتج بنجاح' : 'Product added successfully', type: 'success' });
+        await fetchData();
+        (e.target as HTMLFormElement).reset();
+      } else {
+        throw new Error('Failed to add product');
+      }
+    } catch (error) {
+      setToast({ message: lang === 'ar' ? 'فشل في إضافة المنتج' : 'Failed to add product', type: 'error' });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleAddArea = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -203,6 +225,24 @@ export default function App() {
             onClick={() => setIsSidebarOpen(false)}
             className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 lg:hidden"
           />
+        )}
+      </AnimatePresence>
+
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: 50, x: '-50%' }}
+            className={cn(
+              "fixed bottom-8 left-1/2 z-[100] px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 min-w-[300px]",
+              toast.type === 'success' ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"
+            )}
+          >
+            {toast.type === 'success' ? <Check className="w-5 h-5" /> : <X className="w-5 h-5" />}
+            <span className="font-bold">{toast.message}</span>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -523,8 +563,17 @@ export default function App() {
                       <input name="stock" type="number" required className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none" placeholder="0" />
                     </div>
                   </div>
-                  <button type="submit" className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2">
-                    <Plus className="w-5 h-5" /> {t('addBtn')}
+                  <button 
+                    type="submit" 
+                    disabled={isSubmitting}
+                    className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSubmitting ? (
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <Plus className="w-5 h-5" />
+                    )}
+                    {t('addBtn')}
                   </button>
                 </form>
               </div>

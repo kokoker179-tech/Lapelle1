@@ -69,9 +69,16 @@ async function startServer() {
   });
 
   app.post("/api/products", (req, res) => {
+    console.log("Adding product:", req.body);
     const { name, category, price, stock } = req.body;
-    const info = db.prepare("INSERT INTO products (name, category, price, stock) VALUES (?, ?, ?, ?)").run(name, category, price, stock);
-    res.json({ id: info.lastInsertRowid });
+    try {
+      const info = db.prepare("INSERT INTO products (name, category, price, stock) VALUES (?, ?, ?, ?)").run(name, category, price, stock);
+      console.log("Product added with ID:", info.lastInsertRowid);
+      res.json({ id: info.lastInsertRowid });
+    } catch (error) {
+      console.error("Error adding product:", error);
+      res.status(500).json({ error: "Failed to add product" });
+    }
   });
 
   app.put("/api/products/:id", (req, res) => {
@@ -93,9 +100,16 @@ async function startServer() {
   });
 
   app.post("/api/areas", (req, res) => {
+    console.log("Adding area:", req.body);
     const { name, company_name, location } = req.body;
-    const info = db.prepare("INSERT INTO distribution_areas (name, company_name, location) VALUES (?, ?, ?)").run(name, company_name, location);
-    res.json({ id: info.lastInsertRowid });
+    try {
+      const info = db.prepare("INSERT INTO distribution_areas (name, company_name, location) VALUES (?, ?, ?)").run(name, company_name, location);
+      console.log("Area added with ID:", info.lastInsertRowid);
+      res.json({ id: info.lastInsertRowid });
+    } catch (error) {
+      console.error("Error adding area:", error);
+      res.status(500).json({ error: "Failed to add area" });
+    }
   });
 
   app.put("/api/areas/:id", (req, res) => {
@@ -123,23 +137,33 @@ async function startServer() {
   });
 
   app.post("/api/sales", (req, res) => {
+    console.log("Processing sale:", req.body);
     const { product_id, area_id, quantity } = req.body;
     
-    // Get product price
-    const product = db.prepare("SELECT price, stock FROM products WHERE id = ?").get(product_id) as any;
-    if (!product || product.stock < quantity) {
-      return res.status(400).json({ error: "Insufficient stock or product not found" });
+    try {
+      // Get product price
+      const product = db.prepare("SELECT price, stock FROM products WHERE id = ?").get(product_id) as any;
+      if (!product) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+      if (product.stock < quantity) {
+        return res.status(400).json({ error: "Insufficient stock" });
+      }
+
+      const total_price = product.price * quantity;
+      
+      const transaction = db.transaction(() => {
+        db.prepare("INSERT INTO sales (product_id, area_id, quantity, total_price) VALUES (?, ?, ?, ?)").run(product_id, area_id, quantity, total_price);
+        db.prepare("UPDATE products SET stock = stock - ? WHERE id = ?").run(quantity, product_id);
+      });
+
+      transaction();
+      console.log("Sale processed successfully");
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error processing sale:", error);
+      res.status(500).json({ error: "Failed to process sale" });
     }
-
-    const total_price = product.price * quantity;
-    
-    const transaction = db.transaction(() => {
-      db.prepare("INSERT INTO sales (product_id, area_id, quantity, total_price) VALUES (?, ?, ?, ?)").run(product_id, area_id, quantity, total_price);
-      db.prepare("UPDATE products SET stock = stock - ? WHERE id = ?").run(quantity, product_id);
-    });
-
-    transaction();
-    res.json({ success: true });
   });
 
   app.delete("/api/sales/:id", (req, res) => {
