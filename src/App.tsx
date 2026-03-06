@@ -63,11 +63,28 @@ export default function App() {
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date('2026-03-06T13:45:13-08:00'));
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [dbStatus, setDbStatus] = useState<'online' | 'offline' | 'checking'>('checking');
 
   const t = (key: keyof typeof translations['en']) => translations[lang][key] || key;
 
+  const checkHealth = async () => {
+    try {
+      const res = await fetch('/api/health');
+      if (res.ok) {
+        setDbStatus('online');
+      } else {
+        setDbStatus('offline');
+      }
+    } catch (error) {
+      setDbStatus('offline');
+    }
+  };
+
   useEffect(() => {
     fetchData();
+    checkHealth();
+    const interval = setInterval(checkHealth, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -82,6 +99,7 @@ export default function App() {
     else setLoading(true);
     
     try {
+      await checkHealth();
       const [statsRes, productsRes, areasRes, salesRes] = await Promise.all([
         fetch('/api/stats'),
         fetch('/api/products'),
@@ -314,9 +332,14 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <div className={cn(
                   "w-2 h-2 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]",
-                  isRefreshing ? "bg-amber-500 animate-spin" : "bg-emerald-500 animate-pulse"
+                  isRefreshing ? "bg-amber-500 animate-spin" : 
+                  dbStatus === 'online' ? "bg-emerald-500 animate-pulse" : 
+                  dbStatus === 'offline' ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]" : 
+                  "bg-slate-300"
                 )} />
-                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">{t('dbActive')}</span>
+                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                  {dbStatus === 'online' ? t('dbActive') : dbStatus === 'offline' ? (lang === 'ar' ? 'القاعدة متوقفة' : 'DB Offline') : (lang === 'ar' ? 'جاري الفحص...' : 'Checking...')}
+                </span>
               </div>
               <RefreshCw className={cn("w-3 h-3 text-slate-400 group-hover:text-indigo-600 transition-all", isRefreshing && "animate-spin text-indigo-600")} />
             </div>

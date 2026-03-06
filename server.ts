@@ -63,6 +63,17 @@ async function startServer() {
   app.use(express.json());
 
   // API Routes
+  app.get("/api/health", (req, res) => {
+    try {
+      // Simple query to check DB health
+      db.prepare("SELECT 1").get();
+      res.json({ status: "ok", database: "connected" });
+    } catch (error) {
+      console.error("Health check failed:", error);
+      res.status(500).json({ status: "error", database: "disconnected" });
+    }
+  });
+
   app.get("/api/products", (req, res) => {
     const products = db.prepare("SELECT * FROM products").all();
     res.json(products);
