@@ -2,134 +2,57 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
-import { neon } from '@neondatabase/serverless';
-import Database from 'better-sqlite3';
 import "dotenv/config";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Initialize Database
-// Priority: DATABASE_URL (Env) -> Hardcoded Fallback (from user) -> SQLite
-const dbUrl = process.env.DATABASE_URL || "postgresql://neondb_owner:npg_6LWBu7sUSjVC@ep-small-butterfly-a4f60x0y-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require";
-let dbType: 'neon' | 'sqlite' = 'sqlite';
-let neonSql: any;
-let sqlite: any;
-
-if (dbUrl) {
-  dbType = 'neon';
-  neonSql = neon(dbUrl);
-  console.log("🔗 Using Neon PostgreSQL database");
-} else {
-  dbType = 'sqlite';
-  sqlite = new Database('data.db');
-  console.log("📁 Using local SQLite database (data.db)");
+// In-memory Data Store
+interface Product {
+  id: number;
+  name: string;
+  category: string;
+  price: number;
+  stock: number;
+  created_at: string;
 }
 
-// Universal SQL Tagged Template
-async function sql(strings: TemplateStringsArray, ...values: any[]) {
-  if (dbType === 'neon') {
-    return await neonSql(strings, ...values);
-  } else {
-    // Convert PostgreSQL style placeholders ($1, $2) or tagged template to SQLite (?)
-    // The neon driver uses tagged templates directly.
-    // We'll build a standard query and params array.
-    const query = strings.reduce((acc, str, i) => acc + (i > 0 ? '?' : '') + str, '');
-    
-    // Handle specific PostgreSQL syntax that SQLite doesn't like
-    let sqliteQuery = query
-      .replace(/SERIAL PRIMARY KEY/gi, 'INTEGER PRIMARY KEY AUTOINCREMENT')
-      .replace(/DECIMAL\(\d+,\d+\)/gi, 'REAL')
-      .replace(/TIMESTAMP DEFAULT CURRENT_TIMESTAMP/gi, 'DATETIME DEFAULT CURRENT_TIMESTAMP')
-      .replace(/RETURNING id/gi, '')
-      .replace(/::date::text/gi, ''); // For stats query
-
-    try {
-      const stmt = sqlite.prepare(sqliteQuery);
-      if (sqliteQuery.trim().toUpperCase().startsWith('SELECT')) {
-        const results = stmt.all(...values);
-        // Normalize count results for PostgreSQL compatibility
-        return results.map((r: any) => {
-          if (r['count(*)'] !== undefined) return { ...r, count: r['count(*)'].toString() };
-          return r;
-        });
-      } else {
-        const result = stmt.run(...values);
-        return [{ id: result.lastInsertRowid }];
-      }
-    } catch (err) {
-      console.error("SQLite Error:", err, "Query:", sqliteQuery);
-      throw err;
-    }
-  }
+interface DistributionArea {
+  id: number;
+  name: string;
+  company_name: string;
+  location: string;
+  created_at: string;
 }
 
-async function initDb() {
-  try {
-    console.log(`🚀 Initializing ${dbType === 'neon' ? 'Netlify/Neon' : 'Local SQLite'} Database...`);
-    
-    await sql`
-      CREATE TABLE IF NOT EXISTS products (
-        id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        category TEXT,
-        price DECIMAL(10,2) NOT NULL,
-        stock INTEGER DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS distribution_areas (
-        id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        company_name TEXT,
-        location TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS sales (
-        id SERIAL PRIMARY KEY,
-        product_id INTEGER REFERENCES products(id),
-        area_id INTEGER REFERENCES distribution_areas(id),
-        quantity INTEGER NOT NULL,
-        total_price DECIMAL(10,2) NOT NULL,
-        sale_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
-
-    // Seed sample data if empty
-    const products = await sql`SELECT count(*) FROM products`;
-    const count = dbType === 'neon' ? parseInt(products[0].count) : products[0].count;
-    
-    if (parseInt(count) === 0) {
-      console.log("🌱 Seeding sample data...");
-      await sql`
-        INSERT INTO products (name, category, price, stock) VALUES 
-        ('Classic Leather Bag', 'Bags', 120.00, 50),
-        ('Leather Wallet', 'Accessories', 45.00, 100),
-        ('Premium Belt', 'Accessories', 35.00, 75);
-      `;
-
-      await sql`
-        INSERT INTO distribution_areas (name, company_name, location) VALUES 
-        ('Cairo Central', 'Egypt Logistics', 'Cairo, Egypt'),
-        ('Alexandria Port', 'Sea Trade Co', 'Alexandria, Egypt'),
-        ('Dubai Mall Hub', 'Gulf Retail', 'Dubai, UAE');
-      `;
-
-      await sql`
-        INSERT INTO sales (product_id, area_id, quantity, total_price) VALUES 
-        (1, 1, 5, 600.00),
-        (2, 2, 10, 450.00);
-      `;
-    }
-    console.log("Database initialized successfully");
-  } catch (error) {
-    console.error("Failed to initialize database:", error);
-  }
+interface Sale {
+  id: number;
+  product_id: number;
+  area_id: number;
+  quantity: number;
+  total_price: number;
+  sale_date: string;
 }
+
+let products: Product[] = [
+  { id: 1, name: 'Classic Leather Bag', category: 'Bags', price: 120.00, stock: 50, created_at: new Date().toISOString() },
+  { id: 2, name: 'Leather Wallet', category: 'Accessories', price: 45.00, stock: 100, created_at: new Date().toISOString() },
+  { id: 3, name: 'Premium Belt', category: 'Accessories', price: 35.00, stock: 75, created_at: new Date().toISOString() }
+];
+
+let distributionAreas: DistributionArea[] = [
+  { id: 1, name: 'Cairo Central', company_name: 'Egypt Logistics', location: 'Cairo, Egypt', created_at: new Date().toISOString() },
+  { id: 2, name: 'Alexandria Port', company_name: 'Sea Trade Co', location: 'Alexandria, Egypt', created_at: new Date().toISOString() },
+  { id: 3, name: 'Dubai Mall Hub', company_name: 'Gulf Retail', location: 'Dubai, UAE', created_at: new Date().toISOString() }
+];
+
+let sales: Sale[] = [
+  { id: 1, product_id: 1, area_id: 1, quantity: 5, total_price: 600.00, sale_date: new Date().toISOString() },
+  { id: 2, product_id: 2, area_id: 2, quantity: 10, total_price: 450.00, sale_date: new Date().toISOString() }
+];
+
+let nextProductId = 4;
+let nextAreaId = 4;
+let nextSaleId = 3;
 
 async function startServer() {
   const app = express();
@@ -137,217 +60,172 @@ async function startServer() {
 
   app.use(express.json());
 
-  // Initialize DB
-  await initDb();
-
   // API Routes
-  app.get("/api/health", async (req, res) => {
-    try {
-      await sql`SELECT 1`;
-      res.json({ 
-        status: "ok", 
-        database: dbType === 'neon' ? "connected" : "local",
-        type: dbType
-      });
-    } catch (error) {
-      console.error("Health check failed:", error);
-      res.status(500).json({ status: "error", database: "disconnected" });
-    }
+  app.get("/api/health", (req, res) => {
+    res.json({ 
+      status: "ok", 
+      database: "in-memory",
+      ready: true
+    });
   });
 
-  app.get("/api/products", async (req, res) => {
-    try {
-      const products = await sql`SELECT * FROM products ORDER BY id ASC`;
-      res.json(products);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch products" });
-    }
+  app.get("/api/products", (req, res) => {
+    res.json(products);
   });
 
-  app.post("/api/products", async (req, res) => {
+  app.post("/api/products", (req, res) => {
     const { name, category, price, stock } = req.body;
-    try {
-      const result = await sql`
-        INSERT INTO products (name, category, price, stock) 
-        VALUES (${name}, ${category}, ${price}, ${stock}) 
-        RETURNING id
-      `;
-      res.json({ id: result[0].id });
-    } catch (error) {
-      console.error("Error adding product:", error);
-      res.status(500).json({ error: "Failed to add product" });
-    }
+    const newProduct: Product = {
+      id: nextProductId++,
+      name,
+      category,
+      price: parseFloat(price),
+      stock: parseInt(stock),
+      created_at: new Date().toISOString()
+    };
+    products.push(newProduct);
+    res.json({ id: newProduct.id });
   });
 
-  app.put("/api/products/:id", async (req, res) => {
+  app.put("/api/products/:id", (req, res) => {
     const { id } = req.params;
     const { name, category, price, stock } = req.body;
-    try {
-      await sql`
-        UPDATE products 
-        SET name = ${name}, category = ${category}, price = ${price}, stock = ${stock} 
-        WHERE id = ${id}
-      `;
+    const index = products.findIndex(p => p.id === parseInt(id));
+    if (index !== -1) {
+      products[index] = {
+        ...products[index],
+        name,
+        category,
+        price: parseFloat(price),
+        stock: parseInt(stock)
+      };
       res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update product" });
+    } else {
+      res.status(404).json({ error: "Product not found" });
     }
   });
 
-  app.delete("/api/products/:id", async (req, res) => {
+  app.delete("/api/products/:id", (req, res) => {
     const { id } = req.params;
-    try {
-      await sql`DELETE FROM products WHERE id = ${id}`;
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete product" });
-    }
+    products = products.filter(p => p.id !== parseInt(id));
+    res.json({ success: true });
   });
 
-  app.get("/api/areas", async (req, res) => {
-    try {
-      const areas = await sql`SELECT * FROM distribution_areas ORDER BY id ASC`;
-      res.json(areas);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch areas" });
-    }
+  app.get("/api/areas", (req, res) => {
+    res.json(distributionAreas);
   });
 
-  app.post("/api/areas", async (req, res) => {
+  app.post("/api/areas", (req, res) => {
     const { name, company_name, location } = req.body;
-    try {
-      const result = await sql`
-        INSERT INTO distribution_areas (name, company_name, location) 
-        VALUES (${name}, ${company_name}, ${location}) 
-        RETURNING id
-      `;
-      res.json({ id: result[0].id });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to add area" });
-    }
+    const newArea: DistributionArea = {
+      id: nextAreaId++,
+      name,
+      company_name,
+      location,
+      created_at: new Date().toISOString()
+    };
+    distributionAreas.push(newArea);
+    res.json({ id: newArea.id });
   });
 
-  app.put("/api/areas/:id", async (req, res) => {
+  app.put("/api/areas/:id", (req, res) => {
     const { id } = req.params;
     const { name, company_name, location } = req.body;
-    try {
-      await sql`
-        UPDATE distribution_areas 
-        SET name = ${name}, company_name = ${company_name}, location = ${location} 
-        WHERE id = ${id}
-      `;
+    const index = distributionAreas.findIndex(a => a.id === parseInt(id));
+    if (index !== -1) {
+      distributionAreas[index] = {
+        ...distributionAreas[index],
+        name,
+        company_name,
+        location
+      };
       res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update area" });
+    } else {
+      res.status(404).json({ error: "Area not found" });
     }
   });
 
-  app.delete("/api/areas/:id", async (req, res) => {
+  app.delete("/api/areas/:id", (req, res) => {
     const { id } = req.params;
-    try {
-      await sql`DELETE FROM distribution_areas WHERE id = ${id}`;
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete area" });
-    }
+    distributionAreas = distributionAreas.filter(a => a.id !== parseInt(id));
+    res.json({ success: true });
   });
 
-  app.get("/api/sales", async (req, res) => {
-    try {
-      const sales = await sql`
-        SELECT s.*, p.name as product_name, a.name as area_name 
-        FROM sales s
-        JOIN products p ON s.product_id = p.id
-        JOIN distribution_areas a ON s.area_id = a.id
-        ORDER BY s.sale_date DESC
-      `;
-      res.json(sales);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch sales" });
-    }
+  app.get("/api/sales", (req, res) => {
+    const enrichedSales = sales.map(s => ({
+      ...s,
+      product_name: products.find(p => p.id === s.product_id)?.name || "Unknown Product",
+      area_name: distributionAreas.find(a => a.id === s.area_id)?.name || "Unknown Area"
+    }));
+    res.json(enrichedSales);
   });
 
-  app.post("/api/sales", async (req, res) => {
+  app.post("/api/sales", (req, res) => {
     const { product_id, area_id, quantity } = req.body;
-    try {
-      const product = await sql`SELECT price, stock FROM products WHERE id = ${product_id}`;
-      if (product.length === 0) {
-        return res.status(404).json({ error: "Product not found" });
-      }
-      if (product[0].stock < quantity) {
-        return res.status(400).json({ error: "Insufficient stock" });
-      }
-
-      const total_price = product[0].price * quantity;
-      
-      // Neon/HTTP doesn't support traditional transactions in the same way as better-sqlite3
-      // But we can use a single query with CTEs or just run them sequentially for this demo
-      // For a real app, we'd use a transaction if the driver supports it or a stored procedure
-      await sql`
-        INSERT INTO sales (product_id, area_id, quantity, total_price) 
-        VALUES (${product_id}, ${area_id}, ${quantity}, ${total_price})
-      `;
-      await sql`
-        UPDATE products SET stock = stock - ${quantity} WHERE id = ${product_id}
-      `;
-
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Error processing sale:", error);
-      res.status(500).json({ error: "Failed to process sale" });
+    const productIndex = products.findIndex(p => p.id === parseInt(product_id));
+    
+    if (productIndex === -1) {
+      return res.status(404).json({ error: "Product not found" });
     }
+    
+    if (products[productIndex].stock < quantity) {
+      return res.status(400).json({ error: "Insufficient stock" });
+    }
+
+    const total_price = products[productIndex].price * quantity;
+    
+    const newSale: Sale = {
+      id: nextSaleId++,
+      product_id: parseInt(product_id),
+      area_id: parseInt(area_id),
+      quantity: parseInt(quantity),
+      total_price,
+      sale_date: new Date().toISOString()
+    };
+
+    sales.push(newSale);
+    products[productIndex].stock -= quantity;
+
+    res.json({ success: true });
   });
 
-  app.delete("/api/sales/:id", async (req, res) => {
+  app.delete("/api/sales/:id", (req, res) => {
     const { id } = req.params;
-    try {
-      const sale = await sql`SELECT product_id, quantity FROM sales WHERE id = ${id}`;
-      if (sale.length > 0) {
-        await sql`UPDATE products SET stock = stock + ${sale[0].quantity} WHERE id = ${sale[0].product_id}`;
-        await sql`DELETE FROM sales WHERE id = ${id}`;
+    const saleIndex = sales.findIndex(s => s.id === parseInt(id));
+    if (saleIndex !== -1) {
+      const sale = sales[saleIndex];
+      const productIndex = products.findIndex(p => p.id === sale.product_id);
+      if (productIndex !== -1) {
+        products[productIndex].stock += sale.quantity;
       }
+      sales.splice(saleIndex, 1);
       res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete sale" });
+    } else {
+      res.status(404).json({ error: "Sale not found" });
     }
   });
 
-  app.get("/api/stats", async (req, res) => {
-    try {
-      const totalSales = await sql`SELECT SUM(total_price) as total FROM sales`;
-      const totalProducts = await sql`SELECT COUNT(*) as count FROM products`;
-      const totalAreas = await sql`SELECT COUNT(*) as count FROM distribution_areas`;
-      
-      // Handle date grouping differently for SQLite vs PostgreSQL
-      let salesOverTime;
-      if (dbType === 'neon') {
-        salesOverTime = await sql`
-          SELECT sale_date::date::text as date, SUM(total_price) as total 
-          FROM sales 
-          GROUP BY date 
-          ORDER BY date ASC 
-          LIMIT 30
-        `;
-      } else {
-        salesOverTime = await sql`
-          SELECT date(sale_date) as date, SUM(total_price) as total 
-          FROM sales 
-          GROUP BY date 
-          ORDER BY date ASC 
-          LIMIT 30
-        `;
-      }
+  app.get("/api/stats", (req, res) => {
+    const revenue = sales.reduce((acc, s) => acc + s.total_price, 0);
+    const productsCount = products.length;
+    const areasCount = distributionAreas.length;
+    
+    const salesByDate: Record<string, number> = {};
+    sales.forEach(s => {
+      const date = s.sale_date.split('T')[0];
+      salesByDate[date] = (salesByDate[date] || 0) + s.total_price;
+    });
 
-      res.json({
-        revenue: parseFloat(totalSales[0].total || 0),
-        productsCount: parseInt(totalProducts[0].count || 0),
-        areasCount: parseInt(totalAreas[0].count || 0),
-        salesOverTime
-      });
-    } catch (error) {
-      console.error("Stats error:", error);
-      res.status(500).json({ error: "Failed to fetch stats" });
-    }
+    const salesOverTime = Object.entries(salesByDate)
+      .map(([date, total]) => ({ date, total }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    res.json({
+      revenue,
+      productsCount,
+      areasCount,
+      salesOverTime
+    });
   });
 
   // Vite middleware for development
@@ -365,15 +243,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`\n🚀 Server running on http://localhost:${PORT}`);
-    if (!dbUrl) {
-      console.log("--------------------------------------------------");
-      console.log("💡 TIP: To connect your Netlify/Neon database:");
-      console.log("1. Go to your project settings");
-      console.log("2. Add a DATABASE_URL environment variable");
-      console.log("3. Restart the server");
-      console.log("--------------------------------------------------\n");
-    }
+    console.log(`\n🚀 Server running on http://localhost:${PORT} (In-memory mode)`);
   });
 }
 

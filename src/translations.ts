@@ -48,13 +48,8 @@ export const translations = {
     cancel: "Cancel",
     confirmDelete: "Are you sure you want to delete this?",
     actions: "Actions",
-    dbActive: "Database Active",
+    dbActive: "System Active",
     lastUpdated: "Last Updated",
-    dbSetupTitle: "How to connect your database?",
-    dbSetupStep1: "1. Create a project on Neon.tech or use Netlify's Neon integration.",
-    dbSetupStep2: "2. Copy your Connection String (PostgreSQL URL).",
-    dbSetupStep3: "3. Add it as an environment variable named DATABASE_URL in your project settings.",
-    dbSetupNote: "Once added, the site will automatically initialize the tables and sample data.",
   },
   ar: {
     dashboard: "لوحة التحكم",
@@ -105,13 +100,8 @@ export const translations = {
     cancel: "إلغاء",
     confirmDelete: "هل أنت متأكد من الحذف؟",
     actions: "الإجراءات",
-    dbActive: "قاعدة البيانات تعمل",
+    dbActive: "النظام يعمل",
     lastUpdated: "آخر تحديث",
-    dbSetupTitle: "كيف تقوم بربط قاعدة البيانات؟",
-    dbSetupStep1: "1. قم بإنشاء مشروع على Neon.tech أو استخدم إضافة Neon في Netlify.",
-    dbSetupStep2: "2. انسخ رابط الاتصال (Connection String) الخاص بك.",
-    dbSetupStep3: "3. أضفه كمتغير بيئة باسم DATABASE_URL في إعدادات مشروعك.",
-    dbSetupNote: "بمجرد الإضافة، سيقوم الموقع تلقائياً بإنشاء الجداول والبيانات التجريبية.",
   }
 };
 

@@ -58,7 +58,7 @@ export default function App() {
   const [areas, setAreas] = useState<Area[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dbStatus, setDbStatus] = useState<{ type: 'neon' | 'sqlite', status: 'connected' | 'error' | 'loading' }>({ type: 'sqlite', status: 'loading' });
+  const [serverStatus, setServerStatus] = useState<{ status: 'connected' | 'error' | 'loading', message?: string }>({ status: 'loading' });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<any>(null);
@@ -69,32 +69,43 @@ export default function App() {
 
   const t = (key: keyof typeof translations['en']) => translations[lang][key] || key;
 
-  const checkHealth = async () => {
+  const checkHealth = async (retries = 3): Promise<boolean> => {
     try {
       const res = await fetch('/api/health');
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
-      setDbStatus({ 
-        type: data.type || 'sqlite', 
-        status: data.status === 'ok' ? 'connected' : 'error' 
+      setServerStatus({ 
+        status: data.status === 'ok' ? 'connected' : 'error',
+        message: data.message
       });
-    } catch (error) {
-      console.error("Health check failed");
-      setDbStatus(prev => ({ ...prev, status: 'error' }));
+      return data.status === 'ok';
+    } catch (error: any) {
+      if (retries > 0) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return checkHealth(retries - 1);
+      }
+      setServerStatus({ status: 'error', message: error.message });
+      return false;
     }
   };
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(checkHealth, 30000);
+    const interval = setInterval(() => checkHealth(0), 30000);
     return () => clearInterval(interval);
   }, []);
 
-  const fetchData = async (isManual = false) => {
+  const fetchData = async (isManual = false, retries = 3) => {
     if (isManual) setIsRefreshing(true);
     else setLoading(true);
     
     try {
-      await checkHealth();
+      const isHealthy = await checkHealth(retries);
+      if (!isHealthy && retries > 0) {
+        // If health check failed even after retries, we'll try one more time for the whole fetchData
+        throw new Error("Health check failed");
+      }
+
       const [statsRes, productsRes, areasRes, salesRes] = await Promise.all([
         fetch('/api/stats'),
         fetch('/api/products'),
@@ -102,16 +113,35 @@ export default function App() {
         fetch('/api/sales')
       ]);
       
-      setStats(await statsRes.json());
-      setProducts(await productsRes.json());
-      setAreas(await areasRes.json());
-      setSales(await salesRes.json());
+      // Check if any response is 503 (Initializing)
+      if ([statsRes, productsRes, areasRes, salesRes].some(r => r.status === 503)) {
+        if (retries > 0) {
+          console.log("Database initializing, retrying fetch...");
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          return fetchData(isManual, retries - 1);
+        }
+      }
+
+      const statsData = await statsRes.json();
+      const productsData = await productsRes.json();
+      const areasData = await areasRes.json();
+      const salesData = await salesRes.json();
+
+      setStats(statsData);
+      setProducts(productsData);
+      setAreas(areasData);
+      setSales(salesData);
       setLastUpdated(new Date());
       
       if (isManual) {
         setToast({ message: lang === 'ar' ? 'تم تحديث البيانات بنجاح' : 'Data refreshed successfully', type: 'success' });
       }
-    } catch (error) {
+    } catch (error: any) {
+      if (retries > 0 && (error.message === 'Failed to fetch' || error.message === 'Health check failed')) {
+        console.log(`Retrying data fetch... (${retries} attempts left)`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return fetchData(isManual, retries - 1);
+      }
       console.error("Error fetching data:", error);
       if (isManual) {
         setToast({ message: lang === 'ar' ? 'فشل تحديث البيانات' : 'Failed to refresh data', type: 'error' });
@@ -326,12 +356,10 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <div className={cn(
                   "w-2 h-2 rounded-full",
-                  dbStatus.status === 'connected' 
-                    ? (dbStatus.type === 'neon' ? "bg-indigo-500 animate-pulse" : "bg-emerald-500") 
-                    : "bg-rose-500 animate-pulse"
+                  serverStatus.status === 'connected' ? "bg-emerald-500" : "bg-rose-500 animate-pulse"
                 )} />
                 <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
-                  {dbStatus.type === 'neon' ? (lang === 'ar' ? 'سحابة Neon' : 'Neon Cloud') : (lang === 'ar' ? 'قاعدة محلية' : 'Local SQLite')}
+                  {lang === 'ar' ? 'وضع الذاكرة' : 'In-memory Mode'}
                 </span>
               </div>
               <RefreshCw className={cn("w-3 h-3 text-slate-400 group-hover:text-indigo-600 transition-all", isRefreshing && "animate-spin text-indigo-600")} />
@@ -418,52 +446,27 @@ export default function App() {
                 />
               </div>
 
-              {/* Database Status Banner */}
-              {dbStatus.type === 'neon' ? (
+              {/* Server Status Banner */}
+              {serverStatus.status === 'error' && (
                 <motion.div 
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-3xl p-6 text-white shadow-lg shadow-emerald-100 flex items-center justify-between"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-rose-50 border border-rose-200 rounded-3xl p-6 text-rose-900 shadow-sm flex items-center gap-4"
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-md">
-                      <RefreshCw className="w-6 h-6 animate-spin-slow" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold">{lang === 'ar' ? 'متصل بالسحابة الحقيقية' : 'Connected to Real Cloud'}</h3>
-                      <p className="text-sm opacity-90">{lang === 'ar' ? 'بياناتك الآن مخزنة بشكل دائم على Neon PostgreSQL' : 'Your data is now permanently stored on Neon PostgreSQL'}</p>
-                    </div>
+                  <div className="p-3 bg-rose-100 rounded-2xl text-rose-600">
+                    <X className="w-6 h-6" />
                   </div>
-                  <div className="hidden sm:flex items-center gap-2 bg-white/10 px-4 py-2 rounded-xl backdrop-blur-sm border border-white/10">
-                    <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                    <span className="text-xs font-bold uppercase tracking-wider">Live Sync</span>
+                  <div>
+                    <h3 className="font-bold">{lang === 'ar' ? 'فشل الاتصال بالخادم' : 'Server Connection Failed'}</h3>
+                    <p className="text-sm opacity-80">{serverStatus.message || (lang === 'ar' ? 'حدث خطأ غير متوقع' : 'An unexpected error occurred')}</p>
+                    <button 
+                      onClick={() => checkHealth()} 
+                      className="mt-2 text-xs font-bold underline hover:no-underline"
+                    >
+                      {lang === 'ar' ? 'إعادة المحاولة' : 'Retry Connection'}
+                    </button>
                   </div>
                 </motion.div>
-              ) : (
-                <div className="bg-indigo-600 rounded-3xl p-8 text-white relative overflow-hidden shadow-xl shadow-indigo-200">
-                  <div className="relative z-10">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                        <RefreshCw className="w-5 h-5" />
-                      </div>
-                      <h3 className="text-xl font-bold">{t('dbSetupTitle')}</h3>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                      <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
-                        <p className="text-sm leading-relaxed opacity-90">{t('dbSetupStep1')}</p>
-                      </div>
-                      <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
-                        <p className="text-sm leading-relaxed opacity-90">{t('dbSetupStep2')}</p>
-                      </div>
-                      <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
-                        <p className="text-sm leading-relaxed opacity-90">{t('dbSetupStep3')}</p>
-                      </div>
-                    </div>
-                    <p className="text-sm font-medium opacity-80 italic">{t('dbSetupNote')}</p>
-                  </div>
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
-                  <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-400/20 rounded-full translate-y-1/2 -translate-x-1/2 blur-2xl" />
-                </div>
               )}
 
               {/* Charts */}
